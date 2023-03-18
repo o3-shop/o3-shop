@@ -1,23 +1,14 @@
 # O3-Shop
 
-<logo>
+![O3-Shop logo](https://gitlab.o3-shop.com/o3/o3-documentation/-/raw/main/source/assets/logo.png "O3-Shop")
 
-O3-Shop project is community driven fork of the last GPL based OXID eShop Community Edition (CE).
+## Project package
 
-O3 Shop based on flexible PHP symfony framework and is optimized for PHP8+.
+This package ist part of the O3-Shop. For more informations, consult the [documentation](https://docs.o3-shop.com) and join the commuinity on [https://community.o3-shop.com](https://community.o3-shop-com).
 
-The aim of this project is to maintain and consequently improve the O3 Shop as a flexible & robust B2B/B2C open source ecommerce platform for the DACH market with an open minded approach and involvement of the strong community and partner network.
+- License: GNU General Public License 3 [https://www.gnu.org/licenses/gpl-3.0.de.html](https://www.gnu.org/licenses/gpl-3.0.de.html)
+- Website: [https://www.O3-Shop.com](https://www.O3-Shop.com)
 
-## Join the Community on [https://community.o3-shop.com](https://community.o3-shop.com)
+## Bugs and issues
 
-## See our [documentation](https://o3-shop.github.io)
-
-## About O3 Shop
-
-License: GNU General Public License 3 [https://www.gnu.org/licenses/gpl-3.0.de.html](https://www.gnu.org/licenses/gpl-3.0.de.html)
-
-Website: [https://www.O3-Shop.com](https://www.O3-Shop.com)
-
-<frontend img>
-
-Enjoy!
+If you experience any bugs or issues, please report them in the section **O3-Shop (all versions)** of [https://bugs.o3-shop.com](https://bugs.o3-shop.com).

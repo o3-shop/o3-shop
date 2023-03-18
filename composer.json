@@ -19,9 +19,9 @@
       "role": "Developer"
     }
   ],
-  "minimum-stability": "stable",
+  "minimum-stability": "dev",
   "require": {
-    "o3-shop/shop-metapackage-ce": "~v1.0.0"
+    "o3-shop/shop-metapackage-ce": "dev-b-6.4-nightly"
   },
   "require-dev": {
     "o3-shop/testing-library": "^v1.0.0",

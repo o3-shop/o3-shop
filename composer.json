@@ -21,7 +21,7 @@
   ],
   "minimum-stability": "dev",
   "require": {
-    "o3-shop/shop-metapackage-ce": "dev-b-6.4-nightly"
+    "o3-shop/shop-metapackage-ce": "dev-b-1.0-nightly"
   },
   "require-dev": {
     "o3-shop/testing-library": "^v1.0.0",

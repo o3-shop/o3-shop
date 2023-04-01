@@ -24,7 +24,7 @@
     "o3-shop/shop-metapackage-ce": "dev-b-1.x-nightly"
   },
   "require-dev": {
-    "o3-shop/testing-library": "^v1.0.0",
+    "o3-shop/testing-library": "dev-dev-b-1.x as v1.0.1",
     "incenteev/composer-parameter-handler": "^v2.0.0",
     "o3-shop/shop-ide-helper": "^v1.0.0"
   },

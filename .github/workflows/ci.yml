@@ -1,0 +1,39 @@
+name: CI
+
+on: 
+  push:
+    tags:        
+      - '*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: add files
+      run: |
+        mkdir o3-shop
+        mv composer.json o3-shop/
+    - name: Install dependencies
+      uses: php-actions/composer@v6
+      with:
+        args: "--no-dev --working-dir=o3-shop"
+        dev: no
+        php_version: "8.0.29"
+        version: "2.2"
+        php_extensions: zip exif
+    - name: Pushes to another repository
+      uses: cpina/github-action-push-to-another-repository@main
+      env:
+        SSH_DEPLOY_KEY: ${{ secrets.SSH_DEPLOY_KEY }}
+      with:
+        source-directory: 'o3-shop'
+        destination-github-username: 'o3-shop'
+        destination-repository-name: 'installation_packages'
+        user-email: o3-shop-github@ist-einmalig.de
+        user-name: 'O3-Shop'
+        target-branch: releases
+        create-target-branch-if-needed: false
+        commit-message: create monorepo from ORIGIN_COMMIT ($GITHUB_REF)
+

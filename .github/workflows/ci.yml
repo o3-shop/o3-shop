@@ -10,7 +10,7 @@ jobs:
     strategy:
       max-parallel: 1
       matrix:
-        php: [8.0.29, 8.2.10]
+        php: [8.0.29, 8.1.26, 8.2.10]
     runs-on: ubuntu-latest
 
     steps:
@@ -28,7 +28,7 @@ jobs:
         version: "2.2"
         php_extensions: zip exif
     - name: Pushes to another repository
-      uses: cpina/github-action-push-to-another-repository@main
+      uses: o3-shop/github-action-push-to-another-repository@main
       env:
         SSH_DEPLOY_KEY: ${{ secrets.SSH_DEPLOY_KEY }}
       with:
@@ -39,5 +39,6 @@ jobs:
         user-name: 'O3-Shop'
         target-branch: releases
         create-target-branch-if-needed: false
-        commit-message: create monorepo from ORIGIN_COMMIT ($GITHUB_REF) in PHP ${{ matrix.php }}
+        commit-message: create monorepo from ORIGIN_COMMIT ($GITHUB_REF_NAME) in PHP ${{ matrix.php }}
+        tag-name: ${{ format('{0}_PHP_{1}', github.ref_name, matrix.php) }}
 

@@ -39,6 +39,6 @@ jobs:
         user-name: 'O3-Shop'
         target-branch: releases
         create-target-branch-if-needed: false
-        commit-message: create monorepo from ORIGIN_COMMIT ($GITHUB_REF_NAME) in PHP ${{ matrix.php }}
+        commit-message: create monorepo from ORIGIN_COMMIT ${{ github.ref_name }} in PHP ${{ matrix.php }}
         tag-name: ${{ format('{0}_PHP_{1}', github.ref_name, matrix.php) }}
 

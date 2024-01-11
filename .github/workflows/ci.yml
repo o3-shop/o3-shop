@@ -1,4 +1,4 @@
-name: CI
+name: Artifact Generator
 
 on: 
   push:
@@ -6,7 +6,11 @@ on:
       - '*'
 
 jobs:
-  build:
+  build_artifacts:
+    strategy:
+      max-parallel: 1
+      matrix:
+        php: [8.0.29, 8.2.10]
     runs-on: ubuntu-latest
 
     steps:
@@ -20,7 +24,7 @@ jobs:
       with:
         args: "--no-dev --working-dir=o3-shop"
         dev: no
-        php_version: "8.0.29"
+        php_version: ${{ matrix.php }}
         version: "2.2"
         php_extensions: zip exif
     - name: Pushes to another repository
@@ -35,5 +39,5 @@ jobs:
         user-name: 'O3-Shop'
         target-branch: releases
         create-target-branch-if-needed: false
-        commit-message: create monorepo from ORIGIN_COMMIT ($GITHUB_REF)
+        commit-message: create monorepo from ORIGIN_COMMIT ($GITHUB_REF) in PHP ${{ matrix.php }}
 

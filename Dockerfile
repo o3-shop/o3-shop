@@ -54,4 +54,4 @@ COPY --from=composer:2.2 /usr/bin/composer /usr/local/bin/composer
 RUN sed -i 's|DocumentRoot /var/www/html|DocumentRoot /var/www/html/source|g' /etc/apache2/sites-available/000-default.conf \
     && sed -i '/<VirtualHost \*:80>/a <Directory /var/www/html/source>\n    Options Indexes FollowSymLinks\n    AllowOverride All\n    Require all granted\n</Directory>' /etc/apache2/sites-available/000-default.conf
 
-CMD ["docker/entrypoint.sh"]
+COPY shop .

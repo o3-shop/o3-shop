@@ -1,0 +1,35 @@
+name: Build and Push Shop Docker Image
+
+on:
+  push:
+    tags:
+      - '*'
+  workflow_dispatch:
+
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/o3shop-app
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Install Composer dependencies
+        run: |
+          composer create-project --no-dev o3-shop/o3-shop shop 1.4.1-BETA5
+
+      - name: Build Docker image
+        run: |
+          docker build -t $IMAGE_NAME:${{ github.ref_name }} .
+
+      - name: Push Docker image
+        run: |
+          docker push $IMAGE_NAME:${{ github.ref_name }}

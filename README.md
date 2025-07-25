@@ -1,6 +1,6 @@
 # O3-Shop
 
-![O3-Shop logo](https://gitlab.o3-shop.com/o3/o3-documentation/-/raw/main/source/assets/logo.png "O3-Shop")
+![O3-Shop logo](https://www.o3-shop.com/wp-content/uploads/elementor/thumbs/o3-shop-logo-1-pw26sv9s5904cmoq6lyf07h4lpklvc6insy20a756o.png "O3-Shop")
 
 ## Project package
 

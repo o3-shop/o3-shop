@@ -20,9 +20,10 @@
     }
   ],
   "minimum-stability": "beta",
+  "prefer-stable": true,
   "require": {
     "o3-shop/shop-metapackage-ce": "@beta",
-    "o3-shop/shop-ce": "@beta"
+    "o3-shop/shop-ce": "1.5.*@beta"
   },
   "require-dev": {
     "o3-shop/testing-library": "^v1.0.0",

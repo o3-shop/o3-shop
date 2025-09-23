@@ -19,7 +19,7 @@
       "role": "Developer"
     }
   ],
-  "minimum-stability": "stable",
+  "minimum-stability": "BETA",
   "require": {
     "o3-shop/shop-metapackage-ce": "v1.5.2-BETA1"
   },

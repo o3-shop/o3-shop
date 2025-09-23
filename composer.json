@@ -21,7 +21,7 @@
   ],
   "minimum-stability": "beta",
   "require": {
-    "o3-shop/shop-metapackage-ce": "@beta",
+    "o3-shop/shop-metapackage-ce": "1.5.2@beta",
     "o3-shop/shop-ce": "1.5.2@beta"
   },
   "require-dev": {

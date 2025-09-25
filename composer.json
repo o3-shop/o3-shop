@@ -22,6 +22,8 @@
   "minimum-stability": "dev",
   "require": {
     "o3-shop/shop-metapackage-ce": "dev-test"
+    "o3-shop/shop-ce": "dev-test as v1.5.0",
+
   },
   "require-dev": {
     "o3-shop/testing-library": "^v1.0.0",

@@ -22,7 +22,7 @@
   "minimum-stability": "stable",
   "require": {
     "o3-shop/shop-metapackage-ce": "91.x-dev",
-    "o3-shop/shop-ce": "dev-91-remove-failed-to-regenerate-database-views"
+    "o3-shop/shop-ce": "dev-91-remove-failed-to-regenerate-database-views as 1.5.4-RC1"
   },
   "require-dev": {
     "o3-shop/testing-library": "^v1.0.0",

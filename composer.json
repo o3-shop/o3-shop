@@ -21,9 +21,9 @@
   ],
   "minimum-stability": "stable",
   "require": {
-    "o3-shop/shop-metapackage-ce": "v1.5.4-RC5",
-    "o3-shop/shop-ce": "v1.5.4-RC5",
-    "o3-shop/shop-doctrine-migration-wrapper": "v1.0.2-RC2"
+    "o3-shop/shop-metapackage-ce": "v1.5.4-RC6",
+    "o3-shop/shop-ce": "v1.5.4-RC6",
+    "o3-shop/shop-doctrine-migration-wrapper": "v1.0.2-RC3"
   },
   "require-dev": {
     "o3-shop/testing-library": "^v1.0.0",

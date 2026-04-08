@@ -35,7 +35,7 @@
   ],
   "minimum-stability": "stable",
   "require": {
-    "o3-shop/shop-metapackage-ce": "dev-b-1.6 as v1.5.4-RC6",
+    "o3-shop/shop-metapackage-ce": "dev-b-1.6 as v1.5.4",
     "o3-shop/shop-ce": "dev-req/update-dependencies as v1.5.4",
     "oxid-solution-catalysts/paypal-module": "dev-b-1.0",
     "oxid-solution-catalysts/paypal-client": "dev-b-1.0",

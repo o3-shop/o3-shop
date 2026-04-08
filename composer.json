@@ -19,14 +19,37 @@
       "role": "Developer"
     }
   ],
+  "repositories": [
+    {
+      "type": "vcs",
+      "url": "https://github.com/o3-shop/paypal-module"
+    },
+    {
+      "type": "vcs",
+      "url": "https://github.com/o3-shop/paypal-client"
+    },
+    {
+      "type": "vcs",
+      "url": "https://github.com/nlo-tronet/shop-ce"
+    }
+  ],
   "minimum-stability": "stable",
   "require": {
-    "o3-shop/shop-metapackage-ce": "v1.5.4"
+    "o3-shop/shop-metapackage-ce": "dev-b-1.6 as v1.5.4-RC6",
+    "o3-shop/shop-ce": "dev-req/update-dependencies as v1.5.4",
+    "oxid-solution-catalysts/paypal-module": "dev-b-1.0",
+    "oxid-solution-catalysts/paypal-client": "dev-b-1.0",
+    "o3-shop/shop-doctrine-migration-wrapper": "dev-b-1.6 as 1.0.2",
+    "o3-shop/shop-db-views-generator": "^v1.0.0",
+    "o3-shop/shop-demodata-installer": "dev-b-1.6 as 1.0.1",
+    "o3-shop/shop-composer-plugin": "^v1.1.0",
+    "o3-shop/shop-unified-namespace-generator": "dev-b-1.6 as 1.0.1",
+    "o3-shop/shop-facts": "dev-b-1.6 as 1.0.4"
   },
   "require-dev": {
-    "o3-shop/testing-library": "^v1.0.0",
+    "o3-shop/testing-library": "dev-b-1.6 as 1.1.3",
     "incenteev/composer-parameter-handler": "^v2.0.0",
-    "o3-shop/shop-ide-helper": "^v1.0.0"
+    "o3-shop/shop-ide-helper": "dev-b-1.6 as 1.0.1"
   },
   "autoload-dev": {
     "psr-4": {
@@ -57,7 +80,8 @@
     },
     "allow-plugins": {
       "o3-shop/shop-composer-plugin": true,
-      "o3-shop/shop-unified-namespace-generator": true
+      "o3-shop/shop-unified-namespace-generator": true,
+      "composer/package-versions-deprecated": true
     }
   },
   "extra": {

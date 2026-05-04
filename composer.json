@@ -26,7 +26,7 @@
   "require-dev": {
     "o3-shop/testing-library": "^1.2.0",
     "incenteev/composer-parameter-handler": "^v2.0.0",
-    "o3-shop/shop-ide-helper": "^1.0.1"
+    "o3-shop/shop-ide-helper": "^1.0.0"
   },
   "autoload-dev": {
     "psr-4": {

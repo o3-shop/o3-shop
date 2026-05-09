@@ -19,14 +19,14 @@
       "role": "Developer"
     }
   ],
-  "minimum-stability": "stable",
+  "minimum-stability": "RC",
   "require": {
-    "o3-shop/shop-metapackage-ce": "~v1.3.0"
+    "o3-shop/shop-metapackage-ce": "v1.6.0"
   },
   "require-dev": {
-    "o3-shop/testing-library": "^v1.0.0",
+    "o3-shop/testing-library": "^1.2.0",
     "incenteev/composer-parameter-handler": "^v2.0.0",
-    "o3-shop/shop-ide-helper": "^v1.0.0"
+    "o3-shop/shop-ide-helper": "^1.0.0"
   },
   "autoload-dev": {
     "psr-4": {
@@ -44,6 +44,11 @@
     ],
     "oe:ide-helper:generate": [
       "if [ -f ./vendor/bin/oe-eshop-ide_helper ]; then oe-eshop-ide_helper; fi"
+    ],
+    "oe:module:install:paypal": [
+        "composer require oxid-solution-catalysts/paypal-module ^2.6.0",
+        "vendor/bin/oe-console oe:module:install-configuration source/modules/osc/paypal",
+        "vendor/bin/oe-console oe:cache:clear"
     ]
   },
   "config": {
@@ -52,7 +57,8 @@
     },
     "allow-plugins": {
       "o3-shop/shop-composer-plugin": true,
-      "o3-shop/shop-unified-namespace-generator": true
+      "o3-shop/shop-unified-namespace-generator": true,
+      "composer/package-versions-deprecated": true
     }
   },
   "extra": {

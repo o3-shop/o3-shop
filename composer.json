@@ -21,12 +21,15 @@
   ],
   "minimum-stability": "RC",
   "require": {
-    "o3-shop/shop-metapackage-ce": "v1.6.0"
+    "o3-shop/shop-metapackage-ce": "v1.6.1"
   },
   "require-dev": {
     "o3-shop/testing-library": "^1.2.0",
     "incenteev/composer-parameter-handler": "^v2.0.0",
     "o3-shop/shop-ide-helper": "^1.0.0"
+  },
+  "archive": {
+    "exclude": [".next-bump"]
   },
   "autoload-dev": {
     "psr-4": {
@@ -35,10 +38,12 @@
   },
   "scripts": {
     "post-install-cmd": [
+      "OxidEsales\\EshopCommunity\\Core\\ShopVersionGenerator::generate",
       "Incenteev\\ParameterHandler\\ScriptHandler::buildParameters",
       "@oe:ide-helper:generate"
     ],
     "post-update-cmd": [
+      "OxidEsales\\EshopCommunity\\Core\\ShopVersionGenerator::generate",
       "Incenteev\\ParameterHandler\\ScriptHandler::buildParameters",
       "@oe:ide-helper:generate"
     ],

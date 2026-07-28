@@ -21,7 +21,7 @@
   ],
   "minimum-stability": "RC",
   "require": {
-    "o3-shop/shop-metapackage-ce": "v1.6.2"
+    "o3-shop/shop-metapackage-ce": "v1.7.0-RC1"
   },
   "require-dev": {
     "o3-shop/testing-library": "^1.2.0",

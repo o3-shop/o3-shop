@@ -66,15 +66,15 @@ start_mariadb() {
     die "MariaDB did not start within 60 seconds."
 }
 
-# Shuts MariaDB down and waits until it is gone, whoever started the
-# shutdown (Apache's stop can reach it, too). MariaDB removes its pid file
-# only at the end of a clean shutdown.
 # True while the process runs (a zombie, i.e. exited but not yet reaped,
 # does not count).
 alive() {
     [ -r "/proc/$1/stat" ] && ! grep -q ') Z ' "/proc/$1/stat" 2>/dev/null
 }
 
+# Shuts MariaDB down and waits until it is gone, whoever started the
+# shutdown (Apache's stop can reach it, too). MariaDB removes its pid file
+# only at the end of a clean shutdown.
 stop_mariadb() {
     [ -n "$MARIADB_SAFE_PID" ] || return 0
     local safe_pid="$MARIADB_SAFE_PID" pid
@@ -174,6 +174,9 @@ main() {
     local status=0
     if [ "$stop_requested" -eq 0 ]; then
         log "Shop: ${O3_SHOP_URL:-http://localhost:8080} (admin: ${O3_ADMIN_EMAIL:-admin@example.com}). Demo only, not for production."
+        if [ "${O3_ADMIN_PASSWORD-admin123}" = admin123 ]; then
+            log "WARNING: the admin uses the default password; set O3_ADMIN_PASSWORD for anything reachable by others."
+        fi
         # Apache runs as a child, so a stop signal can also shut MariaDB down.
         "$@" &
         child=$!

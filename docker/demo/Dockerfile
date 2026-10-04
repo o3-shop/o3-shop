@@ -38,13 +38,18 @@ RUN apt-get update \
         calendar \
         exif \
     && a2enmod rewrite \
+    # Keep the runtime libraries the extensions link against, drop the
+    # build-only packages (composer unpacks with PHP's zip extension).
+    && apt-mark manual libicu72 libxml2 libzip4 libpng16-16 libjpeg62-turbo libfreetype6 libbz2-1.0 \
+    && apt-get purge -y --auto-remove \
+        git unzip libicu-dev libfreetype6-dev libjpeg62-turbo-dev libpng-dev libzip-dev libxml2-dev libbz2-dev \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=composer /usr/bin/composer /usr/local/bin/composer
 
 # Production PHP settings (no error output to visitors).
 RUN cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
-    && printf 'memory_limit = 256M\n' > "$PHP_INI_DIR/conf.d/o3-shop.ini"
+    && printf 'memory_limit = 256M\nexpose_php = Off\n' > "$PHP_INI_DIR/conf.d/o3-shop.ini"
 
 # Serve the shop's source/ directory, with .htaccess (SEO URLs) enabled.
 RUN sed -i 's|DocumentRoot /var/www/html|DocumentRoot /var/www/html/source|' /etc/apache2/sites-available/000-default.conf \

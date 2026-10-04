@@ -58,8 +58,24 @@ php vendor/bin/oe-eshop-db_views_generate
 # shop is installed.
 rm -rf "$SHOP_ROOT/source/Setup"
 
-chown -R www-data:www-data "$SHOP_ROOT/source" "$SHOP_ROOT/var"
-# The php base image ships /var/www/html world-writable.
+# Only what the shop writes to (see Core/SystemRequirements.php, plus the
+# compile dir). A recursive chown of all of source/ would store the
+# composer-created files a second time in this layer.
+writable=(
+    "$SHOP_ROOT/var"
+    "$SHOP_ROOT/source/tmp"
+    "$SHOP_ROOT/source/log"
+    "$SHOP_ROOT/source/export"
+    "$SHOP_ROOT/source/cache"
+    "$SHOP_ROOT/source/out/pictures"
+    "$SHOP_ROOT/source/out/media"
+    "$SHOP_ROOT/source/out/downloads"
+)
+mkdir -p "${writable[@]}"
+chown -R www-data:www-data "${writable[@]}"
+# The php base image ships /var/www/html world-writable and owned by
+# www-data; the web user must not be able to replace .env.
+chown root:root "$SHOP_ROOT"
 chmod 755 "$SHOP_ROOT"
 
 log "Stopping MariaDB."

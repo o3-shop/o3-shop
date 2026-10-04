@@ -1,35 +1,114 @@
-name: Build and Push Shop Docker Image
+name: Build and Push Demo Docker Image
+
+# Builds the demo image (shop + MariaDB, installed with demo data) for every
+# published release, release candidates included, and pushes it to GHCR as
+# ghcr.io/o3-shop/o3-shop-demo:<release tag>. The release GitHub marks as
+# Latest also moves `latest`. The image is smoke-tested (amd64) before
+# anything is pushed. Only tags that contain docker/demo/ can be built.
 
 on:
-  push:
-    tags:
-      - '*'
+  release:
+    types: [published]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to build (e.g. v1.7.2-RC1)'
+        required: true
+      latest:
+        description: 'Also tag as latest'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: demo-image-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
 
 env:
-  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/o3shop-app
+  IMAGE: ghcr.io/${{ github.repository_owner }}/o3-shop-demo
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GHCR
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-
-      - name: Install Composer dependencies
+      - name: Resolve tag
+        id: tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
+          INPUT_TAG: ${{ inputs.tag }}
+          INPUT_LATEST: ${{ inputs.latest }}
         run: |
-          composer create-project --no-dev o3-shop/o3-shop shop 1.4.1-BETA5
+          if [ "$GITHUB_EVENT_NAME" = "release" ]; then
+            tag="$RELEASE_TAG"
+            latest=false
+            # Only move `latest` for the release GitHub marks as Latest, so a
+            # patch on an older line never moves it backwards.
+            # A tag with a suffix (-RC1) is never final, even if it was
+            # published without the pre-release flag.
+            if [ "$RELEASE_PRERELEASE" != "true" ] && [ "${tag#*-}" = "$tag" ]; then
+              newest="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)"
+              if [ "$newest" = "$tag" ]; then latest=true; fi
+            fi
+          else
+            tag="$INPUT_TAG"
+            latest="$INPUT_LATEST"
+            if [ "$latest" = "true" ] && [ "${tag#*-}" != "$tag" ]; then
+              echo "Refusing to tag a pre-release ($tag) as latest." >&2
+              exit 1
+            fi
+          fi
+          if ! printf '%s' "$tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.]+)?$'; then
+            echo "Unexpected tag '$tag'." >&2
+            exit 1
+          fi
+          tags="$IMAGE:$tag"
+          if [ "$latest" = "true" ]; then tags="$tags,$IMAGE:latest"; fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "tags=$tags" >> "$GITHUB_OUTPUT"
 
-      - name: Build Docker image
-        run: |
-          docker build -t $IMAGE_NAME:${{ github.ref_name }} .
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.tag.outputs.tag }}
 
-      - name: Push Docker image
-        run: |
-          docker push $IMAGE_NAME:${{ github.ref_name }}
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build for the smoke test (amd64)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/demo/Dockerfile
+          platforms: linux/amd64
+          load: true
+          tags: o3-shop-demo:smoke
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke test
+        run: docker/demo/smoke-test.sh o3-shop-demo:smoke
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push (amd64 + arm64)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/demo/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.tag.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.description=O3-Shop demo (shop + MariaDB with demo data). Not for production.
+            org.opencontainers.image.version=${{ steps.tag.outputs.tag }}

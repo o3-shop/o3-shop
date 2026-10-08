@@ -47,9 +47,10 @@ RUN apt-get update \
 
 COPY --from=composer /usr/bin/composer /usr/local/bin/composer
 
-# Production PHP settings (no error output to visitors).
+# Production PHP settings (no error output to visitors). mail() goes to
+# mail-sink.sh, which discards every message: the demo never sends e-mail.
 RUN cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
-    && printf 'memory_limit = 256M\nexpose_php = Off\n' > "$PHP_INI_DIR/conf.d/o3-shop.ini"
+    && printf 'memory_limit = 256M\nexpose_php = Off\nsendmail_path = /usr/local/bin/mail-sink.sh\n' > "$PHP_INI_DIR/conf.d/o3-shop.ini"
 
 # Serve the shop's source/ directory, with .htaccess (SEO URLs) enabled.
 RUN sed -i 's|DocumentRoot /var/www/html|DocumentRoot /var/www/html/source|' /etc/apache2/sites-available/000-default.conf \
@@ -64,8 +65,8 @@ RUN COMPOSER_ALLOW_SUPERUSER=1 composer install \
         --no-dev --no-interaction --no-progress --optimize-autoloader \
     && rm -rf /root/.composer/cache
 
-COPY docker/demo/install.sh docker/demo/entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/install.sh /usr/local/bin/entrypoint.sh \
+COPY docker/demo/install.sh docker/demo/entrypoint.sh docker/demo/mail-sink.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/install.sh /usr/local/bin/entrypoint.sh /usr/local/bin/mail-sink.sh \
     && /usr/local/bin/install.sh
 
 ENV O3_SHOP_URL=http://localhost:8080 \

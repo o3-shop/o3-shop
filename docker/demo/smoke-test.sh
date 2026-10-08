@@ -7,8 +7,9 @@
 # Checks: the storefront answers, its links use the configured URL, the
 # storefront search lists a real demo product (and not for a nonsense term),
 # the admin login works with the configured credentials, rejects a wrong
-# password and the shop's default admin/admin, and `docker stop` shuts
-# MariaDB down cleanly.
+# password and the shop's default admin/admin, the shop's logger writes its
+# log, e-mail "sends" but is discarded, SMTP can't be enabled, and
+# `docker stop` shuts MariaDB down cleanly.
 
 set -euo pipefail
 
@@ -95,6 +96,31 @@ admin_login "$ADMIN_EMAIL" "wrong-$ADMIN_PASSWORD"
 admin_login admin admin
 [ "$LOGIN" = denied ] || fail "the shop's default login admin/admin is still active"
 echo "Admin login OK."
+
+# Runs PHP code inside the shop (as the web user), with the shop bootstrapped.
+shop_php() {
+    docker exec -u www-data -w /var/www/html "$NAME" php -r "require 'source/bootstrap.php'; $1"
+}
+
+# O3SHOP_CONF_LOG_DIR must resolve below the shop dir; a wrong path makes every
+# log write throw, and the visitor gets the maintenance page (o3-shop#257).
+shop_php '\OxidEsales\Eshop\Core\Registry::getLogger()->error("Smoke test - Checking that the shop log is writable.");' \
+    || fail "the shop's logger failed"
+docker exec "$NAME" grep -qF "Checking that the shop log is writable." /var/www/html/source/log/oxideshop.log \
+    || fail "the shop's logger did not write source/log/oxideshop.log"
+echo "Shop log OK."
+
+# The demo sends no e-mail: mail() "succeeds" into mail-sink.sh, which only
+# logs the recipient (o3-shop#258).
+mail_out="$(shop_php 'exit(oxNew(\OxidEsales\Eshop\Core\Email::class)->sendEmail("smoke-recipient@example.com", "Smoke test", "Smoke test body.") ? 0 : 1);' 2>&1)" \
+    || fail "the shop could not send an e-mail into the sink: $mail_out"
+grep -qF "Discarded an outgoing e-mail to 'smoke-recipient@example.com'" <<<"$mail_out" \
+    || fail "the e-mail did not go to mail-sink.sh: $mail_out"
+smtp="$(docker exec "$NAME" mariadb -uo3shop -po3shop o3shop -N -e \
+    "UPDATE oxshops SET OXSMTP = 'smtp.example.com:25', OXSMTPUSER = 'smoke', OXSMTPPWD = 'smoke'; SELECT CONCAT(OXSMTP, OXSMTPUSER, OXSMTPPWD) FROM oxshops")" \
+    || fail "could not update the shop's SMTP settings"
+[ -z "$(tr -d '[:space:]' <<<"$smtp")" ] || fail "SMTP settings could be set ('$smtp'); the demo could send real e-mail"
+echo "E-mail OK (discarded, SMTP locked)."
 
 # Default stop timeout, as users run it.
 docker stop "$NAME" >/dev/null

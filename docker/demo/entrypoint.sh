@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Starts MariaDB, points the shop at the URL it is reached under and applies
-# the admin login, then runs the main command (Apache). On `docker stop` it
+# Starts MariaDB, points the shop at the URL it is reached under, locks the
+# shop's SMTP settings (the demo sends no e-mail) and applies the admin login,
+# then runs the main command (Apache). On `docker stop` it
 # stops Apache and shuts MariaDB down cleanly.
 #
 # Environment:
@@ -98,6 +99,8 @@ stop_mariadb() {
 }
 
 # config.inc.php reads its settings from the project root .env (Dotenv).
+# O3SHOP_CONF_LOG_DIR is relative to O3SHOP_CONF_SHOPDIR (Config::getLogsDir()
+# prepends the shop dir); an absolute path makes every log write fail.
 write_env() {
     local shop_url="${1%/}/"
     cat > "$SHOP_ROOT/.env" <<EOF
@@ -111,7 +114,7 @@ O3SHOP_CONF_SSLSHOPURL=
 O3SHOP_CONF_ADMINSSLURL=
 O3SHOP_CONF_SHOPDIR=$SHOP_ROOT/source/
 O3SHOP_CONF_COMPILEDIR=$SHOP_ROOT/source/tmp/
-O3SHOP_CONF_LOG_DIR=$SHOP_ROOT/source/log/
+O3SHOP_CONF_LOG_DIR=log/
 O3SHOP_CONF_LOG_LEVEL=error
 O3SHOP_CONF_DEBUG=0
 O3SHOP_CONF_SKIPVIEWUSAGE=0
@@ -121,6 +124,20 @@ EOF
     # Read-only for the shop; only this script writes it.
     chown root:www-data "$SHOP_ROOT/.env"
     chmod 640 "$SHOP_ROOT/.env"
+}
+
+# The demo never sends e-mail: mail() goes to mail-sink.sh (php.ini
+# sendmail_path), and these triggers keep the shop's SMTP settings empty, so
+# setting an SMTP server in the admin (whose login is public) has no effect.
+# Runs on every start, so databases in volumes from older images get them too.
+lock_smtp() {
+    mariadb -uroot "$DB_NAME" <<'SQL'
+CREATE OR REPLACE TRIGGER o3_demo_no_smtp_insert BEFORE INSERT ON oxshops FOR EACH ROW
+    SET NEW.OXSMTP = '', NEW.OXSMTPUSER = '', NEW.OXSMTPPWD = '';
+CREATE OR REPLACE TRIGGER o3_demo_no_smtp_update BEFORE UPDATE ON oxshops FOR EACH ROW
+    SET NEW.OXSMTP = '', NEW.OXSMTPUSER = '', NEW.OXSMTPPWD = '';
+UPDATE oxshops SET OXSMTP = '', OXSMTPUSER = '', OXSMTPPWD = '';
+SQL
 }
 
 # Sets login and password of the shop's default admin. Values reach PHP
@@ -167,6 +184,7 @@ main() {
     # MariaDB down cleanly first; stop_mariadb is a no-op once it has run.
     trap 'stop_mariadb || true' EXIT
     write_env "${O3_SHOP_URL:-http://localhost:8080}"
+    lock_smtp
     apply_admin
     # Smarty caches compiled templates with absolute URLs; start clean.
     find "$SHOP_ROOT/source/tmp" -mindepth 1 -maxdepth 1 ! -name '.htaccess' -exec rm -rf {} +

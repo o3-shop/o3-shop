@@ -41,6 +41,8 @@ docker run -p 8080:80 \
 
 On first use Docker fills empty named volumes with the image's demo data. Don't use empty bind mounts (host directories) for these paths: they hide the installed data and the shop won't start. A volume created with an older image keeps that version's database, so start with fresh volumes when you switch to a newer release.
 
+**The demo sends no e-mail.** Registration, order and newsletter mails are accepted and then discarded; `docker logs` shows one line per discarded mail with its recipient. The shop's SMTP settings stay empty even if you set them in the admin.
+
 Build it locally from this repository: `docker build -f docker/demo/Dockerfile -t o3-shop-demo .`
 
 ## Bugs and issues

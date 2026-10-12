@@ -42,11 +42,12 @@ docker run -p 80:80 -e O3_SHOP_URL=http://demo.example.com ghcr.io/o3-shop/o3-sh
 
 The URL is applied every time the container starts. To change it, create a new container with the new value; with the named volumes below, your data carries over. Only a plain `http(s)://` URL is accepted (letters, digits and `. : _ ~ / - [ ]`); anything else stops the container at startup with an error message.
 
-**HTTPS with Let's Encrypt.** With an `https://` URL the demo serves the shop over HTTPS itself: Apache obtains a Let's Encrypt certificate for the host and renews it while the container runs. Using an https URL accepts the [Let's Encrypt Subscriber Agreement](https://letsencrypt.org/repository/). Requirements: the host name resolves to the machine, and ports 80 and 443 are reachable from the internet as they are (Let's Encrypt checks the host over port 80; an https URL with another port stops the container at startup). Plain http requests, and https requests by IP address or another host name, are redirected to the shop's https URL.
+**HTTPS with Let's Encrypt.** An HTTPS demo is reachable by others: always set your own admin password (`O3_ADMIN_PASSWORD`, as in the examples below); the default `admin123` is published here. With an `https://` URL the demo serves the shop over HTTPS itself: Apache obtains a Let's Encrypt certificate for the host and renews it while the container runs. Using an https URL accepts the [Let's Encrypt Subscriber Agreement](https://letsencrypt.org/repository/). Requirements: the host name resolves to the machine, and ports 80 and 443 are reachable from the internet as they are (Let's Encrypt checks the host over port 80; an https URL with another port stops the container at startup). Plain http requests, and https requests by IP address or another host name, are redirected to the shop's https URL.
 
 ```bash
 docker run -p 80:80 -p 443:443 \
   -e O3_SHOP_URL=https://<your-host> \
+  -e O3_ADMIN_PASSWORD='<your-password>' \
   -v o3-demo-certs:/etc/apache2/md \
   ghcr.io/o3-shop/o3-shop-demo:<release-tag>
 ```
@@ -57,6 +58,7 @@ Until the certificate is active (usually within a minute of the first start), ht
 
 ```bash
 docker run -p 127.0.0.1:8080:80 -e O3_SHOP_URL=https://shop.example.org -e O3_HTTPS=proxy \
+  -e O3_ADMIN_PASSWORD='<your-password>' \
   ghcr.io/o3-shop/o3-shop-demo:<release-tag>
 ```
 

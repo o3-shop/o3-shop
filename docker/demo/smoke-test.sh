@@ -167,9 +167,11 @@ refuse_url() {
     grep -qF "$expected" <<<"$out" || fail "O3_SHOP_URL $url was refused without '$expected': $out"
     docker rm -f "$TLS_NAME" >/dev/null
 }
+NAME="$TLS_NAME"  # fail() shows the https containers' log from here on
 refuse_url "https://localhost" "https needs a public host name"
 refuse_url "https://192.0.2.10" "https needs a public host name"
 refuse_url "https://shop.o3-demo.test" "https needs a public host name"
+refuse_url "https://demo.example.com" "https needs a public host name"
 refuse_url "https://$TLS_HOST:8443" "https works only on the standard port 443"
 refuse_url "https://$TLS_HOST:80:443" "https works only on the standard port 443"
 # These values end up in the Apache configuration.
@@ -202,7 +204,6 @@ docker create --name "$TLS_NAME" -p "$TLS_HTTP_PORT:80" -p "$TLS_HTTPS_PORT:443"
 docker cp "$ACME_CONF" "$TLS_NAME:/etc/apache2/conf-enabled/zz-smoke-acme.conf" \
     || fail "could not copy the test CA configuration into the https container"
 docker start "$TLS_NAME" >/dev/null || fail "could not start the https container"
-NAME="$TLS_NAME"  # fail() shows this container's log from here on
 
 # The shop URL has the standard ports; curl sends that host name but
 # connects to the published test ports.
@@ -274,7 +275,7 @@ for _ in $(seq 1 15); do
 done
 [ -n "$reloaded" ] || fail "a renewed certificate did not trigger a graceful Apache reload"
 ! grep -qF "Reloading Apache failed" <<<"$logs" || fail "reloading Apache failed"
-code="$(tls_curl -k -o /dev/null -w '%{http_code}' "https://$TLS_HOST/")"
+code="$(tls_curl -k -o /dev/null -w '%{http_code}' "https://$TLS_HOST/" || true)"
 [ "$code" = 503 ] || fail "https stopped answering after the reload (got '$code')"
 
 docker stop "$TLS_NAME" >/dev/null

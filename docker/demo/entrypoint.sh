@@ -28,7 +28,7 @@ ADMIN_OXID=oxdefaultadmin
 HTTPS_SITE=o3-shop-https
 # md-message.sh (run by mod_md as the web user) leaves these markers; the
 # entrypoint logs and acts on them, since the script's own output never
-# reaches `docker logs`.
+# reaches `docker logs`. md-message.sh uses the same path.
 CERT_MARKER_DIR=/run/o3-shop-demo
 LETSENCRYPT_STAGING=https://acme-staging-v02.api.letsencrypt.org/directory
 
@@ -63,7 +63,7 @@ validate_env() {
     # A public DNS name: Let's Encrypt issues no certificates for localhost,
     # IP addresses, single-label names or reserved names (.test, .local, ...).
     local domain_pattern='^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]([a-z0-9-]{0,61}[a-z0-9])?$'
-    local reserved_pattern='(\.(test|example|invalid|localhost|local|internal|lan|home|corp|onion|arpa)|^example\.(com|net|org))$'
+    local reserved_pattern='(\.(test|example|invalid|localhost|local|internal|lan|home|corp|onion|arpa)|(^|\.)example\.(com|net|org))$'
     [[ "$url" =~ $url_pattern ]] \
         || die "O3_SHOP_URL '$url' is not a plain http(s) URL (letters, digits and . : _ ~ / - [ ] only)."
     [[ "$email" =~ $email_pattern ]] \

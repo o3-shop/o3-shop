@@ -6,7 +6,7 @@
 # Run:
 #   docker run -p 8080:80 o3-shop-demo
 # With https (Let's Encrypt; the host must be reachable from the internet):
-#   docker run -p 80:80 -p 443:443 -e O3_SHOP_URL=https://demo.example.com \
+#   docker run -p 80:80 -p 443:443 -e O3_SHOP_URL=https://<your-host> \
 #     -v o3-demo-certs:/etc/apache2/md o3-shop-demo
 
 FROM composer:2.2 AS composer

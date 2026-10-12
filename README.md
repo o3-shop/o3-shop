@@ -41,16 +41,16 @@ docker run -p 80:80 -e O3_SHOP_URL=http://demo.example.com ghcr.io/o3-shop/o3-sh
 
 The URL is applied every time the container starts. To change it, create a new container with the new value; with the named volumes below, your data carries over. Only a plain `http(s)://` URL is accepted (letters, digits and `. : _ ~ / - [ ]`); anything else stops the container at startup with an error message.
 
-**HTTPS with Let's Encrypt.** With an `https://` URL the demo serves the shop over HTTPS itself: Apache obtains a Let's Encrypt certificate for the host and renews it while the container runs. Requirements: the host name resolves to the machine, and ports 80 and 443 are reachable from the internet as they are (Let's Encrypt checks the host over port 80; an https URL with another port stops the container at startup). Plain http requests, and https requests by IP address or another host name, are redirected to the shop's https URL.
+**HTTPS with Let's Encrypt.** With an `https://` URL the demo serves the shop over HTTPS itself: Apache obtains a Let's Encrypt certificate for the host and renews it while the container runs. Using an https URL accepts the [Let's Encrypt Subscriber Agreement](https://letsencrypt.org/repository/). Requirements: the host name resolves to the machine, and ports 80 and 443 are reachable from the internet as they are (Let's Encrypt checks the host over port 80; an https URL with another port stops the container at startup). Plain http requests, and https requests by IP address or another host name, are redirected to the shop's https URL.
 
 ```bash
 docker run -p 80:80 -p 443:443 \
-  -e O3_SHOP_URL=https://demo.example.com \
+  -e O3_SHOP_URL=https://<your-host> \
   -v o3-demo-certs:/etc/apache2/md \
   ghcr.io/o3-shop/o3-shop-demo:<release-tag>
 ```
 
-Until the certificate is active (usually within a minute of the first start), https requests for the host get `503 Service Unavailable`. `docker logs` shows the progress; if Let's Encrypt can't issue the certificate, a line says so, the errors before it name the cause, and Apache retries automatically. Keep the certificates in a named volume (`/etc/apache2/md`, as above): without one, every new container requests a new certificate, and Let's Encrypt limits how many duplicate certificates a host gets per week. An https URL needs a public host name; `localhost`, IP addresses, reserved names (`.test`, `.local`, `example.com`, …) and names without a dot stop the container at startup. For local tests, use an http URL. With `O3_ACME_STAGING=1`, use a separate certificate volume, so a later production run doesn't start from the untrusted staging certificate.
+Until the certificate is active (usually within a minute of the first start), https requests for the host get `503 Service Unavailable`. `docker logs` shows the progress; if Let's Encrypt can't issue the certificate, a line says so, the errors before it name the cause, and Apache retries automatically. Keep the certificates in a named volume (`/etc/apache2/md`, as above): without one, every new container requests a new certificate, and Let's Encrypt limits how many duplicate certificates a host gets per week. An https URL needs a public host name; `localhost`, IP addresses, reserved names (`.test`, `.local`, `example.com` and its subdomains, …) and names without a dot stop the container at startup. For local tests, use an http URL. With `O3_ACME_STAGING=1`, use a separate certificate volume, so a later production run doesn't start from the untrusted staging certificate.
 
 An https URL always makes the container terminate TLS itself. Running the demo behind a reverse proxy that terminates TLS and forwards plain http is not supported in this mode.
 

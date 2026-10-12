@@ -77,7 +77,8 @@ ENV O3_SHOP_URL=http://localhost:8080 \
     O3_ADMIN_PASSWORD=admin123
 
 # 443 and the certificate store /etc/apache2/md are used only with an https
-# O3_SHOP_URL (O3_ACME_EMAIL, O3_ACME_STAGING: see entrypoint.sh).
+# O3_SHOP_URL and O3_HTTPS=letsencrypt, the default (O3_HTTPS=proxy,
+# O3_ACME_EMAIL, O3_ACME_STAGING: see entrypoint.sh).
 EXPOSE 80 443
 # The php:apache base image stops with SIGWINCH (Apache graceful stop). The
 # entrypoint traps SIGTERM to stop Apache and then shut MariaDB down cleanly.

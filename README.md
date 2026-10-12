@@ -29,8 +29,9 @@ docker run -p 8080:80 ghcr.io/o3-shop/o3-shop-demo:<release-tag>
 | `O3_SHOP_URL` | `http://localhost:8080` | URL the shop is reached under. Set it when you use another port or host, e.g. `docker run -p 9000:80 -e O3_SHOP_URL=http://localhost:9000 …` |
 | `O3_ADMIN_EMAIL` | `admin@example.com` | Admin login |
 | `O3_ADMIN_PASSWORD` | `admin123` | Admin password |
-| `O3_ACME_EMAIL` | (none) | HTTPS only: contact address for the Let's Encrypt certificate |
-| `O3_ACME_STAGING` | `0` | HTTPS only: `1` uses the Let's Encrypt staging CA (untrusted certificates, for testing without rate limits) |
+| `O3_HTTPS` | `letsencrypt` | HTTPS only: `letsencrypt` = the container terminates TLS with a Let's Encrypt certificate; `proxy` = a reverse proxy in front terminates TLS |
+| `O3_ACME_EMAIL` | (none) | `letsencrypt` only: contact address for the certificate |
+| `O3_ACME_STAGING` | `0` | `letsencrypt` only: `1` uses the Let's Encrypt staging CA (untrusted certificates, for testing without rate limits) |
 
 **Run it under another URL.** The shop builds its links from `O3_SHOP_URL`. If you open it under any address other than `http://localhost:8080` (another port, the machine's IP address or a host name), set the variable to exactly that address. Otherwise links point to the wrong place:
 
@@ -52,7 +53,14 @@ docker run -p 80:80 -p 443:443 \
 
 Until the certificate is active (usually within a minute of the first start), https requests for the host get `503 Service Unavailable`. `docker logs` shows the progress; if Let's Encrypt can't issue the certificate, a line says so, the errors before it name the cause, and Apache retries automatically. Keep the certificates in a named volume (`/etc/apache2/md`, as above): without one, every new container requests a new certificate, and Let's Encrypt limits how many duplicate certificates a host gets per week. An https URL needs a public host name; `localhost`, IP addresses, reserved names (`.test`, `.local`, `example.com` and its subdomains, …) and names without a dot stop the container at startup. For local tests, use an http URL. With `O3_ACME_STAGING=1`, use a separate certificate volume, so a later production run doesn't start from the untrusted staging certificate.
 
-An https URL always makes the container terminate TLS itself. Running the demo behind a reverse proxy that terminates TLS and forwards plain http is not supported in this mode.
+**Behind a reverse proxy.** If a reverse proxy (nginx, Traefik, Caddy, …) terminates TLS and forwards plain http to the container, set `O3_HTTPS=proxy`. The container then uses no certificate and doesn't redirect; the shop builds https links and treats every request as https. Any host name and port work, `localhost` included:
+
+```bash
+docker run -p 127.0.0.1:8080:80 -e O3_SHOP_URL=https://shop.example.org -e O3_HTTPS=proxy \
+  ghcr.io/o3-shop/o3-shop-demo:<release-tag>
+```
+
+Make the container reachable only by the proxy (bind the port to `127.0.0.1` as above, or use a private Docker network): the shop treats every request as https, also one that bypasses the proxy over plain http. The proxy must forward the original `Host` header (nginx: `proxy_set_header Host $host;`).
 
 Changes stay as long as you keep the container (`docker stop` / `docker start`). To keep them across new containers, use named volumes for the database and the uploaded pictures:
 

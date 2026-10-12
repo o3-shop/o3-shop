@@ -15,7 +15,9 @@
 # https (other host names to the shop URL, ACME challenges excepted), the
 # shop gets the https URL, and a renewed certificate triggers a reload. It
 # runs against a certificate authority that does not exist, so no
-# certificate is issued and nothing is sent to Let's Encrypt.
+# certificate is issued and nothing is sent to Let's Encrypt. O3_HTTPS=proxy
+# (port port+3): plain http with https links, no redirect loop, no TLS in
+# the container.
 
 set -euo pipefail
 
@@ -31,11 +33,13 @@ TLS_NAME="$NAME-https"
 TLS_HOST=smoke.o3-shop.com
 TLS_HTTP_PORT=$((PORT + 1))
 TLS_HTTPS_PORT=$((PORT + 2))
+PROXY_NAME="$NAME-proxy"
+PROXY_PORT=$((PORT + 3))
 ACME_CONF="$(mktemp)"
 
 cleanup() {
     rm -f "$JAR" "$ACME_CONF"
-    docker rm -f "$HTTP_NAME" "$TLS_NAME" >/dev/null 2>&1 || true
+    docker rm -f "$HTTP_NAME" "$TLS_NAME" "$PROXY_NAME" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
@@ -178,6 +182,7 @@ refuse_url "https://$TLS_HOST:80:443" "https works only on the standard port 443
 refuse_url "https://$TLS_HOST" "O3_ACME_EMAIL" -e "O3_ACME_EMAIL=ops@o3-shop.com
 Include /etc/shadow"
 refuse_url "https://$TLS_HOST" "O3_ACME_STAGING must be 0 or 1" -e O3_ACME_STAGING=yes
+refuse_url "https://$TLS_HOST" "O3_HTTPS must be letsencrypt or proxy" -e O3_HTTPS=nginx
 
 # O3_ACME_EMAIL and O3_ACME_STAGING reach mod_md's configuration (checked
 # offline: nothing is started).
@@ -284,5 +289,39 @@ grep -qF "[o3-shop-demo] MariaDB stopped cleanly." <<<"$(docker logs "$TLS_NAME"
 exit_code="$(docker inspect "$TLS_NAME" -f '{{.State.ExitCode}}')"
 [ "$exit_code" = 0 ] || fail "https container exited with $exit_code after docker stop"
 echo "HTTPS mode OK (bad URLs refused, TLS on 443, redirects, ACME challenge path, shop SSL URL, reload on renewal)."
+
+# O3_HTTPS=proxy: a reverse proxy terminates TLS (here: no proxy, the test
+# plays it and talks plain http to port 80). localhost and a port are fine.
+# Let's Encrypt's host names are pinned anyway, in case mod_md got enabled.
+proxy_url="https://localhost:$PROXY_PORT"
+docker run -d --name "$PROXY_NAME" -p "$PROXY_PORT:80" \
+    --add-host acme-v02.api.letsencrypt.org:127.0.0.1 \
+    --add-host acme-staging-v02.api.letsencrypt.org:127.0.0.1 \
+    -e O3_SHOP_URL="$proxy_url" -e O3_HTTPS=proxy "$IMAGE" >/dev/null
+NAME="$PROXY_NAME"
+page=""
+for _ in $(seq 1 60); do
+    if page="$(curl -fsS --max-time 10 "http://localhost:$PROXY_PORT/" 2>/dev/null)"; then break; fi
+    page=""
+    sleep 2
+done
+[ -n "$page" ] || fail "proxy mode: the shop did not answer plain http within 120 seconds"
+# Links come from the shop URL in .env.
+grep -qF "src=\"$proxy_url/out/" <<<"$page" || fail "proxy mode: the shop does not build its links with $proxy_url"
+# The shop treats the request as https: its cookies carry the Secure flag.
+headers="$(curl -sS --max-time 10 -D - -o /dev/null "http://localhost:$PROXY_PORT/")" || fail "proxy mode: request failed"
+grep -qiE '^set-cookie:.*;[[:space:]]*secure' <<<"$headers" \
+    || fail "proxy mode: the shop does not treat requests as https (no Secure cookie): $headers"
+# The shop sends an autologin visitor to its SSL URL unless it sees an https
+# request; behind the proxy that must not redirect (it would loop).
+autologin="$(curl -s --max-time 10 -o /dev/null -w '%{http_code} %{redirect_url}' \
+    -b "oxid_1_autologin=1" "http://localhost:$PROXY_PORT/index.php?cl=search")" || fail "proxy mode: request failed"
+[ "$autologin" = "200 " ] || fail "proxy mode: the shop redirects a request the proxy received over https: '$autologin'"
+if docker exec "$PROXY_NAME" apache2ctl -M 2>/dev/null | grep -qE "md_module|ssl_module"; then
+    fail "proxy mode: mod_md/mod_ssl are enabled; the container must not terminate TLS"
+fi
+docker stop "$PROXY_NAME" >/dev/null
+[ "$(docker inspect "$PROXY_NAME" -f '{{.State.ExitCode}}')" = 0 ] || fail "proxy mode: container did not stop cleanly"
+echo "Proxy mode OK (plain http, https links, requests treated as https: Secure cookies, no redirect loop; no TLS in the container)."
 
 echo "Smoke test passed."

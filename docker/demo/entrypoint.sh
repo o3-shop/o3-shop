@@ -2,15 +2,19 @@
 # Starts MariaDB, points the shop at the URL it is reached under, locks the
 # shop's SMTP settings (the demo sends no e-mail) and applies the admin login,
 # then runs the main command (Apache). With an https URL, Apache serves the
-# shop over TLS with a Let's Encrypt certificate (mod_md). On `docker stop` it
+# shop over TLS with a Let's Encrypt certificate (mod_md), or, with
+# O3_HTTPS=proxy, leaves TLS to a reverse proxy in front. On `docker stop` it
 # stops Apache and shuts MariaDB down cleanly.
 #
 # Environment:
 #   O3_SHOP_URL        URL the shop is reached under (default http://localhost:8080)
 #   O3_ADMIN_EMAIL     admin login (default admin@example.com)
 #   O3_ADMIN_PASSWORD  admin password (default admin123)
-#   O3_ACME_EMAIL      https only: contact address for the certificate (optional)
-#   O3_ACME_STAGING    https only: 1 = Let's Encrypt staging CA, for testing (default 0)
+#   O3_HTTPS           https only: letsencrypt (default) = terminate TLS here with
+#                      a Let's Encrypt certificate; proxy = a reverse proxy
+#                      terminates TLS and forwards plain http to port 80
+#   O3_ACME_EMAIL      letsencrypt only: contact address for the certificate (optional)
+#   O3_ACME_STAGING    letsencrypt only: 1 = Let's Encrypt staging CA, for testing (default 0)
 #
 # install.sh sources this file for its helpers; main() only runs when the
 # file is executed.
@@ -26,6 +30,8 @@ DB_PWD=o3shop
 ADMIN_OXID=oxdefaultadmin
 # Apache site for https mode, written at container start.
 HTTPS_SITE=o3-shop-https
+# Apache configuration for O3_HTTPS=proxy, written at container start.
+HTTPS_PROXY_CONF=o3-shop-https-proxy
 # md-message.sh (run by mod_md as the web user) leaves these markers; the
 # entrypoint logs and acts on them, since the script's own output never
 # reaches `docker logs`. md-message.sh uses the same path.
@@ -70,7 +76,11 @@ validate_env() {
         || die "O3_ADMIN_EMAIL '$email' is not a plain e-mail address."
     [[ -n "${O3_ADMIN_PASSWORD-admin123}" ]] || die "O3_ADMIN_PASSWORD must not be empty."
 
+    [[ "${O3_HTTPS:-letsencrypt}" =~ ^(letsencrypt|proxy)$ ]] \
+        || die "O3_HTTPS must be letsencrypt or proxy, not '$O3_HTTPS'."
     [[ "$url" == https://* ]] || return 0
+    # Behind a reverse proxy any host name and port works.
+    [ "${O3_HTTPS:-letsencrypt}" = proxy ] && return 0
     local domain host_port
     domain="$(https_domain "$url")"
     [[ "$domain" =~ $domain_pattern && ! "$domain" =~ $reserved_pattern && ${#domain} -le 253 ]] \
@@ -176,10 +186,22 @@ EOF
 # redirected to https, except mod_md's own ACME challenges, and requests for
 # any other host name (IP address, aliases) to the shop URL. With an http URL,
 # switches all of that off again. Certificates live in /etc/apache2/md.
+# With O3_HTTPS=proxy a reverse proxy terminates TLS: Apache stays on plain
+# http, and PHP is told every request is https, since it is at the proxy. The
+# shop decides https mainly from $_SERVER['HTTPS'] (Config::_checkSsl); without
+# it, an https SSL URL makes it redirect to https again and again.
 configure_https() {
-    local domain
+    local domain proxy=""
     domain="$(https_domain "${O3_SHOP_URL:-http://localhost:8080}")"
-    if [ -z "$domain" ]; then
+    [ -n "$domain" ] && [ "${O3_HTTPS:-letsencrypt}" = proxy ] && proxy=yes
+    if [ -n "$proxy" ]; then
+        echo "SetEnv HTTPS on" > "/etc/apache2/conf-available/$HTTPS_PROXY_CONF.conf"
+        a2enconf -q "$HTTPS_PROXY_CONF" >/dev/null
+    else
+        a2disconf -q "$HTTPS_PROXY_CONF" >/dev/null 2>&1 || true
+        rm -f "/etc/apache2/conf-available/$HTTPS_PROXY_CONF.conf"
+    fi
+    if [ -z "$domain" ] || [ -n "$proxy" ]; then
         a2dissite -q "$HTTPS_SITE" >/dev/null 2>&1 || true
         a2dismod -q -f md ssl >/dev/null 2>&1 || true
         rm -f "/etc/apache2/sites-available/$HTTPS_SITE.conf"
@@ -319,7 +341,11 @@ main() {
         if [ "${O3_ADMIN_PASSWORD-admin123}" = admin123 ]; then
             log "WARNING: the admin uses the default password; set O3_ADMIN_PASSWORD for anything reachable by others."
         fi
-        if [ -n "$(https_domain "${O3_SHOP_URL:-http://localhost:8080}")" ]; then
+        if [ -n "$(https_domain "${O3_SHOP_URL:-http://localhost:8080}")" ] && [ "${O3_HTTPS:-letsencrypt}" = proxy ]; then
+            log "HTTPS via reverse proxy: the proxy terminates TLS and forwards plain http to port 80 of this container."
+        elif [ "${O3_HTTPS:-letsencrypt}" = proxy ]; then
+            log "WARNING: O3_HTTPS=proxy has no effect with the http URL ${O3_SHOP_URL:-http://localhost:8080}; use the https URL the proxy serves."
+        elif [ -n "$(https_domain "${O3_SHOP_URL:-http://localhost:8080}")" ]; then
             log "HTTPS: Apache obtains a Let's Encrypt certificate for $(https_domain "$O3_SHOP_URL") (ports 80 and 443 must be reachable from the internet). Until it is active, https requests for that host get 503."
             watch_certificates &
             watcher=$!

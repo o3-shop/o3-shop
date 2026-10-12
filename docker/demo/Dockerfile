@@ -5,6 +5,9 @@
 #   docker build -f docker/demo/Dockerfile -t o3-shop-demo .
 # Run:
 #   docker run -p 8080:80 o3-shop-demo
+# With https (Let's Encrypt; the host must be reachable from the internet):
+#   docker run -p 80:80 -p 443:443 -e O3_SHOP_URL=https://<your-host> \
+#     -v o3-demo-certs:/etc/apache2/md o3-shop-demo
 
 FROM composer:2.2 AS composer
 
@@ -65,15 +68,18 @@ RUN COMPOSER_ALLOW_SUPERUSER=1 composer install \
         --no-dev --no-interaction --no-progress --optimize-autoloader \
     && rm -rf /root/.composer/cache
 
-COPY docker/demo/install.sh docker/demo/entrypoint.sh docker/demo/mail-sink.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/install.sh /usr/local/bin/entrypoint.sh /usr/local/bin/mail-sink.sh \
+COPY docker/demo/install.sh docker/demo/entrypoint.sh docker/demo/mail-sink.sh docker/demo/md-message.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/install.sh /usr/local/bin/entrypoint.sh /usr/local/bin/mail-sink.sh /usr/local/bin/md-message.sh \
     && /usr/local/bin/install.sh
 
 ENV O3_SHOP_URL=http://localhost:8080 \
     O3_ADMIN_EMAIL=admin@example.com \
     O3_ADMIN_PASSWORD=admin123
 
-EXPOSE 80
+# 443 and the certificate store /etc/apache2/md are used only with an https
+# O3_SHOP_URL and O3_HTTPS=letsencrypt, the default (O3_HTTPS=proxy,
+# O3_ACME_EMAIL, O3_ACME_STAGING: see entrypoint.sh).
+EXPOSE 80 443
 # The php:apache base image stops with SIGWINCH (Apache graceful stop). The
 # entrypoint traps SIGTERM to stop Apache and then shut MariaDB down cleanly.
 STOPSIGNAL SIGTERM

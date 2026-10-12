@@ -30,6 +30,15 @@ docker run -p 8080:80 ghcr.io/o3-shop/o3-shop-demo:<release-tag>
 | `O3_ADMIN_EMAIL` | `admin@example.com` | Admin login |
 | `O3_ADMIN_PASSWORD` | `admin123` | Admin password |
 
+**Run it under another URL.** The shop builds its links from `O3_SHOP_URL`. If you open it under any address other than `http://localhost:8080` (another port, the machine's IP address or a host name), set the variable to exactly that address. Otherwise links point to the wrong place:
+
+```bash
+docker run -p 9000:80 -e O3_SHOP_URL=http://localhost:9000 ghcr.io/o3-shop/o3-shop-demo:<release-tag>
+docker run -p 80:80 -e O3_SHOP_URL=http://demo.example.com ghcr.io/o3-shop/o3-shop-demo:<release-tag>
+```
+
+The URL is applied every time the container starts. To change it, create a new container with the new value; with the named volumes below, your data carries over. Only a plain `http(s)://` URL is accepted (letters, digits and `. : _ ~ / - [ ]`); anything else stops the container at startup with an error message.
+
 Changes stay as long as you keep the container (`docker stop` / `docker start`). To keep them across new containers, use named volumes for the database and the uploaded pictures:
 
 ```bash

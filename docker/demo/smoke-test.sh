@@ -9,7 +9,15 @@
 # the admin login works with the configured credentials, rejects a wrong
 # password and the shop's default admin/admin, the shop's logger writes its
 # log, e-mail "sends" but is discarded, SMTP can't be enabled, and
-# `docker stop` shuts MariaDB down cleanly.
+# `docker stop` shuts MariaDB down cleanly. HTTPS mode (ports port+1 and
+# port+2): https URLs without a public host name or with another port are
+# refused; with a valid one, Apache speaks TLS on 443, redirects http to
+# https (other host names to the shop URL, ACME challenges excepted), the
+# shop gets the https URL, and a renewed certificate triggers a reload. It
+# runs against a certificate authority that does not exist, so no
+# certificate is issued and nothing is sent to Let's Encrypt. O3_HTTPS=proxy
+# (port port+3): plain http with https links, no redirect loop, no TLS in
+# the container.
 
 set -euo pipefail
 
@@ -20,10 +28,18 @@ ADMIN_EMAIL=smoke@example.com
 ADMIN_PASSWORD=smoke-test-pw
 NAME="o3-shop-demo-smoke-$$"
 JAR="$(mktemp)"
+HTTP_NAME="$NAME"
+TLS_NAME="$NAME-https"
+TLS_HOST=smoke.o3-shop.com
+TLS_HTTP_PORT=$((PORT + 1))
+TLS_HTTPS_PORT=$((PORT + 2))
+PROXY_NAME="$NAME-proxy"
+PROXY_PORT=$((PORT + 3))
+ACME_CONF="$(mktemp)"
 
 cleanup() {
-    rm -f "$JAR"
-    docker rm -f "$NAME" >/dev/null 2>&1 || true
+    rm -f "$JAR" "$ACME_CONF"
+    docker rm -f "$HTTP_NAME" "$TLS_NAME" "$PROXY_NAME" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
@@ -134,5 +150,178 @@ fi
 exit_code="$(docker inspect "$NAME" -f '{{.State.ExitCode}}')"
 [ "$exit_code" = 0 ] || fail "container exited with $exit_code after docker stop"
 echo "Clean stop OK."
+
+# HTTPS mode (o3-shop#269). URLs Let's Encrypt or the redirect can't serve
+# must stop the container at startup. Bounded wait, since an accepted URL
+# keeps it running; no network, so it could not reach Let's Encrypt either.
+# refuse_url <url> <expected message> [extra docker run arguments...]
+refuse_url() {
+    local url="$1" expected="$2" out
+    shift 2
+    docker run -d --name "$TLS_NAME" --network none -e O3_SHOP_URL="$url" "$@" "$IMAGE" >/dev/null
+    for _ in $(seq 1 30); do
+        [ "$(docker inspect "$TLS_NAME" -f '{{.State.Running}}')" = false ] && break
+        sleep 1
+    done
+    [ "$(docker inspect "$TLS_NAME" -f '{{.State.Running}}')" = false ] \
+        || fail "O3_SHOP_URL $url was accepted (container still running after 30 seconds)"
+    out="$(docker logs "$TLS_NAME" 2>&1)"
+    [ "$(docker inspect "$TLS_NAME" -f '{{.State.ExitCode}}')" != 0 ] \
+        || fail "O3_SHOP_URL $url was refused with exit code 0: $out"
+    grep -qF "$expected" <<<"$out" || fail "O3_SHOP_URL $url was refused without '$expected': $out"
+    docker rm -f "$TLS_NAME" >/dev/null
+}
+NAME="$TLS_NAME"  # fail() shows the https containers' log from here on
+refuse_url "https://localhost" "https needs a public host name"
+refuse_url "https://192.0.2.10" "https needs a public host name"
+refuse_url "https://shop.o3-demo.test" "https needs a public host name"
+refuse_url "https://demo.example.com" "https needs a public host name"
+refuse_url "https://$TLS_HOST:8443" "https works only on the standard port 443"
+refuse_url "https://$TLS_HOST:80:443" "https works only on the standard port 443"
+# These values end up in the Apache configuration.
+refuse_url "https://$TLS_HOST" "O3_ACME_EMAIL" -e "O3_ACME_EMAIL=ops@o3-shop.com
+Include /etc/shadow"
+refuse_url "https://$TLS_HOST" "O3_ACME_STAGING must be 0 or 1" -e O3_ACME_STAGING=yes
+refuse_url "https://$TLS_HOST" "O3_HTTPS must be letsencrypt or proxy" -e O3_HTTPS=nginx
+
+# O3_ACME_EMAIL and O3_ACME_STAGING reach mod_md's configuration (checked
+# offline: nothing is started).
+md_conf="$(docker run --rm --network none --entrypoint bash \
+    -e O3_SHOP_URL="https://$TLS_HOST" -e O3_ACME_EMAIL=ops@o3-shop.com -e O3_ACME_STAGING=1 "$IMAGE" \
+    -c 'source /usr/local/bin/entrypoint.sh && validate_env && configure_https && cat /etc/apache2/sites-enabled/o3-shop-https.conf')" \
+    || fail "could not generate the https configuration"
+grep -qxF "MDContactEmail ops@o3-shop.com" <<<"$md_conf" || fail "O3_ACME_EMAIL does not reach mod_md: $md_conf"
+grep -qxF "MDCertificateAuthority https://acme-staging-v02.api.letsencrypt.org/directory" <<<"$md_conf" \
+    || fail "O3_ACME_STAGING=1 does not select the staging CA: $md_conf"
+
+# mod_md must not reach a real certificate authority from the smoke test:
+# Let's Encrypt's host names resolve to nothing here, and mod_md is pointed
+# at a CA that does not exist. The CA setting is copied in, not
+# bind-mounted: a bind mount Docker cannot share turns into an empty
+# directory, which Apache skips.
+DEAD_CA=http://127.0.0.1:9/directory
+printf '<IfModule md_module>\n    MDCertificateAuthority %s\n</IfModule>\n' "$DEAD_CA" > "$ACME_CONF"
+docker create --name "$TLS_NAME" -p "$TLS_HTTP_PORT:80" -p "$TLS_HTTPS_PORT:443" \
+    --add-host acme-v02.api.letsencrypt.org:127.0.0.1 \
+    --add-host acme-staging-v02.api.letsencrypt.org:127.0.0.1 \
+    -e O3_SHOP_URL="https://$TLS_HOST" \
+    "$IMAGE" >/dev/null || fail "could not create the https container"
+docker cp "$ACME_CONF" "$TLS_NAME:/etc/apache2/conf-enabled/zz-smoke-acme.conf" \
+    || fail "could not copy the test CA configuration into the https container"
+docker start "$TLS_NAME" >/dev/null || fail "could not start the https container"
+
+# The shop URL has the standard ports; curl sends that host name but
+# connects to the published test ports.
+tls_curl() {
+    curl -s --max-time 10 --connect-to "$TLS_HOST:80:127.0.0.1:$TLS_HTTP_PORT" \
+        --connect-to "$TLS_HOST:443:127.0.0.1:$TLS_HTTPS_PORT" "$@"
+}
+
+code=""
+for _ in $(seq 1 60); do
+    # -k: there is no certificate yet; mod_md answers 503 until it has one.
+    code="$(tls_curl -k -o /dev/null -w '%{http_code}' "https://$TLS_HOST/" 2>/dev/null || true)"
+    [ "$code" = 503 ] && break
+    sleep 2
+done
+[ "$code" = 503 ] || fail "https did not answer 503 (no certificate yet) within 120 seconds, got '$code'"
+
+# Proves the test CA is in effect: mod_md reports it cannot reach it.
+ca_logged=""
+for _ in $(seq 1 30); do
+    logs="$(docker logs "$TLS_NAME" 2>&1)"
+    if grep -qF "$DEAD_CA" <<<"$logs"; then ca_logged=yes; break; fi
+    sleep 2
+done
+[ -n "$ca_logged" ] || fail "mod_md never tried the test CA $DEAD_CA; it may be using a real one"
+! grep -qi "letsencrypt.org" <<<"$logs" || fail "mod_md tried to contact Let's Encrypt during the smoke test"
+
+redirect="$(tls_curl -o /dev/null -w '%{http_code} %{redirect_url}' "http://$TLS_HOST/index.php?cl=search")" \
+    || fail "http request in https mode failed"
+[ "$redirect" = "302 https://$TLS_HOST/index.php?cl=search" ] || fail "http is not redirected to https: '$redirect'"
+other="$(curl -s --max-time 10 -o /dev/null -w '%{http_code} %{redirect_url}' "http://127.0.0.1:$TLS_HTTP_PORT/index.php?cl=search")" \
+    || fail "http request by IP address in https mode failed"
+[ "$other" = "302 https://$TLS_HOST/index.php?cl=search" ] \
+    || fail "http by IP address is not redirected to the shop URL: '$other'"
+challenge="$(tls_curl -o /dev/null -w '%{http_code}' "http://$TLS_HOST/.well-known/acme-challenge/smoke-test")" \
+    || fail "ACME challenge request failed"
+[ "$challenge" = 404 ] || fail "ACME challenges are not answered by mod_md over http (got '$challenge'); Let's Encrypt could not validate the host"
+other_tls="$(curl -sk --max-time 10 -o /dev/null -w '%{http_code} %{redirect_url}' "https://127.0.0.1:$TLS_HTTPS_PORT/index.php?cl=search")" \
+    || fail "https request by IP address failed"
+[ "$other_tls" = "302 https://$TLS_HOST/index.php?cl=search" ] \
+    || fail "https by IP address is not redirected to the shop URL: '$other_tls'"
+docker exec "$TLS_NAME" grep -qxF "O3SHOP_CONF_SSLSHOPURL=https://$TLS_HOST/" /var/www/html/.env \
+    || fail "the shop's SSL URL is not https://$TLS_HOST/"
+shop_urls="$(shop_php '$c = \OxidEsales\Eshop\Core\Registry::getConfig(); echo $c->getShopUrl(), " ", $c->getSslShopUrl();')" \
+    || fail "could not read the shop URLs"
+[ "$shop_urls" = "https://$TLS_HOST/ https://$TLS_HOST/" ] \
+    || fail "the shop does not build its links with https://$TLS_HOST/: '$shop_urls'"
+
+# mod_md reports the failed attempt (the test CA does not exist) through
+# MDMessageCmd; the entrypoint logs it.
+errored=""
+for _ in $(seq 1 30); do
+    logs="$(docker logs "$TLS_NAME" 2>&1)"
+    if grep -qF "Let's Encrypt could not issue the certificate for $TLS_HOST" <<<"$logs"; then errored=yes; break; fi
+    sleep 2
+done
+[ -n "$errored" ] || fail "a failed certificate attempt was not reported in the log"
+
+# A certificate mod_md reports as renewed gets activated by a graceful
+# reload: Apache logs "resuming normal operations" (AH00163) once more.
+starts="$(docker logs "$TLS_NAME" 2>&1 | grep -c AH00163 || true)"
+docker exec -u www-data "$TLS_NAME" /usr/local/bin/md-message.sh renewed "$TLS_HOST" \
+    || fail "md-message.sh failed"
+reloaded=""
+for _ in $(seq 1 15); do
+    logs="$(docker logs "$TLS_NAME" 2>&1)"
+    if [ "$(grep -c AH00163 <<<"$logs" || true)" -gt "$starts" ]; then reloaded=yes; break; fi
+    sleep 2
+done
+[ -n "$reloaded" ] || fail "a renewed certificate did not trigger a graceful Apache reload"
+! grep -qF "Reloading Apache failed" <<<"$logs" || fail "reloading Apache failed"
+code="$(tls_curl -k -o /dev/null -w '%{http_code}' "https://$TLS_HOST/" || true)"
+[ "$code" = 503 ] || fail "https stopped answering after the reload (got '$code')"
+
+docker stop "$TLS_NAME" >/dev/null
+grep -qF "[o3-shop-demo] MariaDB stopped cleanly." <<<"$(docker logs "$TLS_NAME" 2>&1)" \
+    || fail "docker stop did not shut MariaDB down cleanly in https mode"
+exit_code="$(docker inspect "$TLS_NAME" -f '{{.State.ExitCode}}')"
+[ "$exit_code" = 0 ] || fail "https container exited with $exit_code after docker stop"
+echo "HTTPS mode OK (bad URLs refused, TLS on 443, redirects, ACME challenge path, shop SSL URL, reload on renewal)."
+
+# O3_HTTPS=proxy: a reverse proxy terminates TLS (here: no proxy, the test
+# plays it and talks plain http to port 80). localhost and a port are fine.
+# Let's Encrypt's host names are pinned anyway, in case mod_md got enabled.
+proxy_url="https://localhost:$PROXY_PORT"
+docker run -d --name "$PROXY_NAME" -p "$PROXY_PORT:80" \
+    --add-host acme-v02.api.letsencrypt.org:127.0.0.1 \
+    --add-host acme-staging-v02.api.letsencrypt.org:127.0.0.1 \
+    -e O3_SHOP_URL="$proxy_url" -e O3_HTTPS=proxy "$IMAGE" >/dev/null
+NAME="$PROXY_NAME"
+page=""
+for _ in $(seq 1 60); do
+    if page="$(curl -fsS --max-time 10 "http://localhost:$PROXY_PORT/" 2>/dev/null)"; then break; fi
+    page=""
+    sleep 2
+done
+[ -n "$page" ] || fail "proxy mode: the shop did not answer plain http within 120 seconds"
+# Links come from the shop URL in .env.
+grep -qF "src=\"$proxy_url/out/" <<<"$page" || fail "proxy mode: the shop does not build its links with $proxy_url"
+# The shop treats the request as https: its cookies carry the Secure flag.
+headers="$(curl -sS --max-time 10 -D - -o /dev/null "http://localhost:$PROXY_PORT/")" || fail "proxy mode: request failed"
+grep -qiE '^set-cookie:.*;[[:space:]]*secure' <<<"$headers" \
+    || fail "proxy mode: the shop does not treat requests as https (no Secure cookie): $headers"
+# The shop sends an autologin visitor to its SSL URL unless it sees an https
+# request; behind the proxy that must not redirect (it would loop).
+autologin="$(curl -s --max-time 10 -o /dev/null -w '%{http_code} %{redirect_url}' \
+    -b "oxid_1_autologin=1" "http://localhost:$PROXY_PORT/index.php?cl=search")" || fail "proxy mode: request failed"
+[ "$autologin" = "200 " ] || fail "proxy mode: the shop redirects a request the proxy received over https: '$autologin'"
+if docker exec "$PROXY_NAME" apache2ctl -M 2>/dev/null | grep -qE "md_module|ssl_module"; then
+    fail "proxy mode: mod_md/mod_ssl are enabled; the container must not terminate TLS"
+fi
+docker stop "$PROXY_NAME" >/dev/null
+[ "$(docker inspect "$PROXY_NAME" -f '{{.State.ExitCode}}')" = 0 ] || fail "proxy mode: container did not stop cleanly"
+echo "Proxy mode OK (plain http, https links, requests treated as https: Secure cookies, no redirect loop; no TLS in the container)."
 
 echo "Smoke test passed."
